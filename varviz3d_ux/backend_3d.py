@@ -522,23 +522,79 @@ VIEWER_HTML = r"""<!DOCTYPE html>
   document.getElementById("applyTrack").onclick = () => applyHeatmap(document.getElementById("trackSel").value);
   document.getElementById("rsBtn").onclick = () => highlightRsid().catch(console.error);
 
-  async function loadStructure(){
-    const raw = document.getElementById("uniprotID").value.trim();
-    if (!raw) return alert("Enter Gene symbol or UniProt ID");
-    const id = await resolveIfNeeded(raw);
-    document.getElementById("uniprotID").value = id; // show resolved accession
+  async function loadStructure() {
+    const input = document.getElementById("uniprotID");
+    const raw = input.value.trim();
+    
+    if (!raw) {
+        alert("Введите символ гена или UniProt ID (например: BRCA1 или P38398)");
+        return;
+    }
 
-    lockedDomain = null; lastTracks = null; lastDomains = null; highlightPos = null;
-    try { if (highlightRep) highlightRep.dispose(); } catch(e){}
+    // Показываем индикатор загрузки
+    const loadBtn = document.getElementById("loadBtn");
+    const originalBtnText = loadBtn.textContent;
+    loadBtn.textContent = "Загрузка...";
+    loadBtn.disabled = true;
 
-    stage.removeAllComponents();
-    comp = await stage.loadFile(`https://alphafold.ebi.ac.uk/files/AF-${id}-F1-model_v4.pdb`);
-    comp.autoView();
+    try {
+        const id = await resolveIfNeeded(raw);
+        input.value = id;  // показываем нормализованный ID
 
-    if (mode === "heat")     await applyHeatmap(document.getElementById("trackSel").value);
-    else if (mode === "domains") { await fetchDomains(id); drawDomainTrack(); applyDomainBase(); }
-    else applyBaseColoring();
-  }
+        lockedDomain = null;
+        lastTracks = null;
+        lastDomains = null;
+        highlightPos = null;
+        try { if (highlightRep) highlightRep.dispose(); } catch(e){}
+
+        stage.removeAllComponents();
+
+        // Изменяем блок получения pdbUrl:
+        console.log(`Запрашиваем структуру для: ${id} через локальный бэкенд`);
+
+        // Вместо прямого fetch к ebi.ac.uk идем к себе на бэкенд:
+        const apiUrl = `${API_BASE}/api/alphafold/${id}`;
+        const apiResponse = await fetch(apiUrl);
+        
+        if (!apiResponse.ok) {
+            throw new Error(`Local API returned ${apiResponse.status}`);
+        }
+
+        const data = await apiResponse.json();
+        
+        if (!data || !data.url) {
+            throw new Error("No model URL returned from backend");
+        }
+
+        const pdbUrl = data.url;
+        console.log("Загружаем модель в плеер:", pdbUrl);
+
+        // Передаем ссылку в NGL Viewer
+        comp = await stage.loadFile(pdbUrl);
+        
+        console.log(`✅ Структура ${id} успешно загружена`);
+        comp.autoView();
+
+        // Применяем текущий режим отображения
+        if (mode === "heat") {
+            await applyHeatmap(document.getElementById("trackSel").value);
+        } else if (mode === "domains") {
+            await fetchDomains(id);
+            drawDomainTrack();
+            applyDomainBase();
+        } else {
+            applyBaseColoring();
+        }
+
+    } catch (error) {
+        console.error("Ошибка загрузки структуры:", error);
+        alert(`Не удалось загрузить структуру для ${raw}.\n\nВозможные причины:\n• Неверный ID\n• Проблемы с интернетом\n• Сервер AlphaFold временно недоступен`);
+    } finally {
+        // Возвращаем кнопку в исходное состояние
+        loadBtn.textContent = originalBtnText;
+        loadBtn.disabled = false;
+    }
+}
 
   document.getElementById("loadBtn").onclick = () => loadStructure().catch(console.error);
 
@@ -850,6 +906,36 @@ def viewer():
     
     # Fallback: inline HTML (you should copy your viewer.html content here)
     return VIEWER_HTML 
+    
+# NEW: Set proxy // прокси для парсинга данных, новая штука
+@app.route('/api/alphafold/<uid>')
+def get_alphafold_url(uid):
+    try:
+        # Делаем запрос из Python (тут CORS не мешает)
+        url = f"https://alphafold.ebi.ac.uk/api/prediction/{uid}"
+        response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+        
+        if response.status_code != 200:
+            return jsonify({"error": f"AlphaFold returned {response.status_code}"}), 404
+            
+        data = response.json()
+        
+        # Парсим современную структуру ответа AlphaFold API
+        if isinstance(data, dict) and "results" in data and data["results"]:
+            # Берем ссылку на .pdb или .cif файл
+            pdb_url = data["results"][0].get("pdbUrl") or data["results"][0].get("cifUrl")
+            if pdb_url:
+                return jsonify({"url": pdb_url})
+                
+        # Если формат старый (массив)
+        elif isinstance(data, list) and len(data) > 0:
+            pdb_url = data[0].get("url") or data[0].get("pdbUrl")
+            if pdb_url:
+                return jsonify({"url": pdb_url})
+
+        return jsonify({"error": "Structure URL not found in API response"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     print("Starting 3D backend on http://localhost:5001")
