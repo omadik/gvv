@@ -1,4 +1,4 @@
-# VarViz3D
+# GenVarViz (WIP)
 🧬 Integrated Variant Analysis Platform with 2D/3D Visualization
 
 ## 🎯 Overview
