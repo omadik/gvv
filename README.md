@@ -23,7 +23,7 @@ VarViz3D is a comprehensive platform for genetic variant analysis that combines 
 #### Option 1: Automated Installation (Recommended)
 ```bash
 # Clone the repository
-git clone https://github.com/your-team/varviz3d.git
+git clone https://github.com/omadik/gvv.git
 cd varviz3d
 
 # Run installation script
@@ -384,8 +384,8 @@ If you have any difficulty using VarViz3D, feel free to open an [issue](https://
 |------------------|-------|---------------------|
 | Yuliya Barablina |  | 2D genomic visualization, variant annotation, risk scores fetching |
 | Daria Panchenko |  | 3D protein structure visualization, variant mapping and domain annotation |
-| Omad Saidov |  | Front-, backend deployment |
-| Xenia Sukhanova | sukhanovaeniad@gmail.com | Project consultant, basic functionality implementation |
+| Omad Saidov | gxvxrnxr @ yandex ! kz | Front-, backend deployment |
+| Xenia Sukhanova | sukhanovaeniad @ gmail | Project consultant, basic functionality implementation |
 | Ivan Tsalkovsky |  | Implementation of literature mining for gene and/or variant |
 
 ## 📚 Additioinal Resources
